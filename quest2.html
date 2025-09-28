@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Constructor de Rutas de Aprendizaje</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f8f9fa;
+      padding: 20px;
+      margin: 0;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    h1 {
+      color: #2c3e50;
+      margin-bottom: 10px;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 10px 16px;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+    .btn:hover {
+      background: #2980b9;
+    }
+    .btn-start { background: #2ecc71; }
+    .btn-start:hover { background: #27ae60; }
+    .btn-end { background: #e74c3c; }
+    .btn-end:hover { background: #c0392b; }
+    .btn-import { background: #9b59b6; }
+    .btn-import:hover { background: #8e44ad; }
+    .btn-export { background: #f39c12; }
+    .btn-export:hover { background: #d35400; }
+    
+    .roadmap-container {
+      position: relative;
+      min-height: 300px;
+    }
+    .roadmap-line {
+      position: absolute;
+      left: 50px;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: #3498db;
+      z-index: 0;
+    }
+    .nodes {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      position: relative;
+      z-index: 1;
+    }
+    .node {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+      margin-left: 70px;
+      position: relative;
+      max-width: 700px;
+      border-left: 5px solid #95a5a6;
+    }
+    .node.start {
+      border-left-color: #2ecc71;
+    }
+    .node.intermediate {
+      border-left-color: #3498db;
+    }
+    .node.end {
+      border-left-color: #e74c3c;
+    }
+    .node::before {
+      content: '';
+      position: absolute;
+      left: -60px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #95a5a6;
+      border: 3px solid white;
+      box-shadow: 0 0 0 3px #95a5a6;
+    }
+    .node.start::before { 
+      background: #2ecc71;
+      box-shadow: 0 0 0 3px #2ecc71;
+    }
+    .node.intermediate::before { 
+      background: #3498db;
+      box-shadow: 0 0 0 3px #3498db;
+    }
+    .node.end::before { 
+      background: #e74c3c;
+      box-shadow: 0 0 0 3px #e74c3c;
+    }
+    .node-title {
+      font-size: 1.3em;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #2c3e50;
+      padding-right: 30px;
+    }
+    .node-title-input {
+      width: 100%;
+      padding: 8px;
+      font-size: 1.2em;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .node-comment {
+      margin: 10px 0;
+      font-style: italic;
+      color: #7f8c8d;
+    }
+    .node-comment-input {
+      width: 100%;
+      padding: 6px;
+      border: 1px dashed #ddd;
+      border-radius: 4px;
+      font-style: italic;
+      color: #7f8c8d;
+    }
+    .topics-list {
+      margin: 15px 0;
+    }
+    .topic-item {
+      display: flex;
+      align-items: center;
+      margin: 8px 0;
+      padding: 5px;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    .topic-item:hover {
+      background: #f8f9fa;
+    }
+    .topic-input {
+      flex: 1;
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .topic-checkbox {
+      margin-right: 10px;
+      transform: scale(1.2);
+    }
+    .topic-actions {
+      margin-left: 10px;
+      display: flex;
+      gap: 5px;
+    }
+    .topic-actions button {
+      padding: 4px 8px;
+      background: #f1f1f1;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .node-actions {
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+    }
+    .node-actions button {
+      padding: 6px 12px;
+      background: #ecf0f1;
+      border: 1px solid #bdc3c7;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .add-topic-btn {
+      background: #3498db;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .empty-state {
+      text-align: center;
+      color: #7f8c8d;
+      padding: 40px;
+    }
+    .progress-container {
+      background: white;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+    .progress-bar {
+      height: 10px;
+      background: #ecf0f1;
+      border-radius: 5px;
+      margin: 10px 0;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #2ecc71;
+      transition: width 0.3s;
+    }
+    .progress-text {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9em;
+      color: #7f8c8d;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      width: 90%;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .close-modal {
+      background: none;
+      border: none;
+      font-size: 1.5em;
+      cursor: pointer;
+    }
+    .import-textarea {
+      width: 100%;
+      height: 300px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: monospace;
+      resize: vertical;
+    }
+    .search-container {
+      margin-bottom: 20px;
+    }
+    .search-input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .node.highlighted {
+      box-shadow: 0 0 0 3px #f39c12;
+    }
+    .validation-error {
+      color: #e74c3c;
+      font-size: 0.9em;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🛠️ Constructor de Rutas de Aprendizaje</h1>
+      <p>Crea tu propia quest de aprendizaje: agrega nodos, edita temas y marca tu progreso</p>
+    </header>
+
+    <div class="progress-container">
+      <h3>Progreso de la Ruta</h3>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+      </div>
+      <div class="progress-text">
+        <span id="completedCount">0 completados</span>
+        <span id="totalCount">0 total</span>
+        <span id="progressPercentage">0%</span>
+      </div>
+    </div>
+
+    <div class="search-container">
+      <input type="text" class="search-input" id="searchInput" placeholder="Buscar en la ruta...">
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-start" onclick="addNode('start')">+ Inicio</button>
+      <button class="btn" onclick="addNode('intermediate')">+ Paso Intermedio</button>
+      <button class="btn btn-end" onclick="addNode('end')">+ Final</button>
+      <button class="btn btn-import" onclick="showImportModal()">📥 Importar</button>
+      <button class="btn btn-export" onclick="exportRoadmap()">📤 Exportar</button>
+      <button class="btn" onclick="validateRoadmap()">✅ Validar</button>
+    </div>
+
+    <div class="roadmap-container">
+      <div class="roadmap-line"></div>
+      <div class="nodes" id="nodesContainer">
+        <div class="empty-state" id="emptyState">
+          <p>¡Comienza agregando tu primer nodo!</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para importar -->
+  <div class="modal" id="importModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Importar Ruta</h2>
+        <button class="close-modal" onclick="closeImportModal()">&times;</button>
+      </div>
+      <p>Pega tu ruta en formato de texto usando la sintaxis:</p>
+      <ul>
+        <li><strong>+</strong> para nodos de inicio/final</li>
+        <li><strong>-</strong> para nodos intermedios</li>
+        <li><strong>--</strong> para temas con checklist</li>
+        <li><strong>#</strong> para comentarios o títulos</li>
+        <li><strong>!</strong> para conexiones entre puntos</li>
+      </ul>
+      <textarea class="import-textarea" id="importTextarea" placeholder="Ejemplo:
++ Inicio
+! # el usuario deberá investigar alguna introducción al análisis de datos
+!- 1. SQL
+! -- introducción a sql y su sintaxis
+! -- aprender sobre joins
+!- 2. Python para análisis de datos
+! -- aprender sintaxis básica de python
++ Listo haberes un analista de datos"></textarea>
+      <div class="node-actions" style="margin-top: 15px;">
+        <button class="btn" onclick="importRoadmap()">Importar</button>
+        <button class="btn" onclick="closeImportModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Estado inicial
+  let roadmap = JSON.parse(localStorage.getItem('customRoadmap')) || [];
+  
+  // Guardar en localStorage
+  function saveRoadmap() {
+    localStorage.setItem('customRoadmap', JSON.stringify(roadmap));
+    updateProgress();
+  }
+
+  // Renderizar el roadmap
+  function renderRoadmap() {
+    const container = document.getElementById('nodesContainer');
+    const emptyState = document.getElementById('emptyState');
+    
+    if (!container || !emptyState) return;
+    
+    if (roadmap.length === 0) {
+      emptyState.style.display = 'block';
+      container.innerHTML = '';
+      return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    roadmap.forEach((node, index) => {
+      const nodeEl = document.createElement('div');
+      nodeEl.className = `node ${node.type}`;
+      nodeEl.dataset.index = index;
+      
+      // Título editable
+      const titleEl = document.createElement('div');
+      titleEl.className = 'node-title';
+      titleEl.innerHTML = `
+        <input type="text" class="node-title-input" value="${node.title}" 
+               onblur="updateNodeTitle(${index}, this.value)">
+      `;
+      
+      // Comentario editable
+      const commentEl = document.createElement('div');
+      commentEl.className = 'node-comment';
+      commentEl.innerHTML = `
+        <input type="text" class="node-comment-input" value="${node.comment || ''}" 
+               placeholder="Agregar comentario (opcional)" 
+               onblur="updateNodeComment(${index}, this.value)">
+      `;
+      
+      // Lista de temas
+      const topicsEl = document.createElement('div');
+      topicsEl.className = 'topics-list';
+      
+      node.topics.forEach((topic, tIndex) => {
+        const topicEl = document.createElement('div');
+        topicEl.className = 'topic-item';
+        topicEl.innerHTML = `
+          <input type="checkbox" class="topic-checkbox" ${topic.completed ? 'checked' : ''}
+                 onchange="toggleTopicCompletion(${index}, ${tIndex})">
+          <input type="text" class="topic-input" value="${topic.text}"
+                 onblur="updateTopicText(${index}, ${tIndex}, this.value)">
+          <div class="topic-actions">
+            <button onclick="moveTopicUp(${index}, ${tIndex})">⬆️</button>
+            <button onclick="moveTopicDown(${index}, ${tIndex})">⬇️</button>
+            <button onclick="removeTopic(${index}, ${tIndex})">🗑️</button>
+          </div>
+        `;
+        topicsEl.appendChild(topicEl);
+      });
+      
+      // Botón para añadir tema
+      const addTopicBtn = document.createElement('button');
+      addTopicBtn.className = 'add-topic-btn';
+      addTopicBtn.textContent = '+ Añadir tema';
+      addTopicBtn.onclick = () => addTopic(index);
+      
+      // Acciones del nodo
+      const actionsEl = document.createElement('div');
+      actionsEl.className = 'node-actions';
+      actionsEl.innerHTML = `
+        <button onclick="moveNodeUp(${index})">⬆️ Subir</button>
+        <button onclick="moveNodeDown(${index})">⬇️ Bajar</button>
+        <button onclick="removeNode(${index})">🗑️ Eliminar</button>
+      `;
+      
+      nodeEl.appendChild(titleEl);
+      nodeEl.appendChild(commentEl);
+      nodeEl.appendChild(topicsEl);
+      nodeEl.appendChild(addTopicBtn);
+      nodeEl.appendChild(actionsEl);
+      
+      container.appendChild(nodeEl);
+    });
+    
+    updateProgress();
+  }
+
+  // Actualizar progreso
+  function updateProgress() {
+    let totalTopics = 0;
+    let completedTopics = 0;
+    
+    roadmap.forEach(node => {
+      totalTopics += node.topics.length;
+      completedTopics += node.topics.filter(topic => topic.completed).length;
+    });
+    
+    const percentage = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
+    
+    document.getElementById('progressFill').style.width = `${percentage}%`;
+    document.getElementById('completedCount').textContent = `${completedTopics} completados`;
+    document.getElementById('totalCount').textContent = `${totalTopics} total`;
+    document.getElementById('progressPercentage').textContent = `${percentage}%`;
+  }
+
+  // Añadir nodo
+  function addNode(type) {
+    const defaultTitles = {
+      start: 'Inicio: Mi Objetivo',
+      intermediate: 'Paso Intermedio',
+      end: '¡Logrado!'
+    };
+    
+    roadmap.push({
+      type: type,
+      title: defaultTitles[type],
+      comment: '',
+      topics: []
+    });
+    
+    saveRoadmap();
+    renderRoadmap();
+  }
+
+  // Añadir tema
+  function addTopic(nodeIndex) {
+    roadmap[nodeIndex].topics.push({
+      text: 'Nuevo tema',
+      completed: false
+    });
+    saveRoadmap();
+    renderRoadmap();
+  }
+
+  // Eliminar tema
+  function removeTopic(nodeIndex, topicIndex) {
+    roadmap[nodeIndex].topics.splice(topicIndex, 1);
+    saveRoadmap();
+    renderRoadmap();
+  }
+
+  // Mover tema hacia arriba
+  function moveTopicUp(nodeIndex, topicIndex) {
+    if (topicIndex === 0) return;
+    const topics = roadmap[nodeIndex].topics;
+    [topics[topicIndex], topics[topicIndex - 1]] = [topics[topicIndex - 1], topics[topicIndex]];
+    saveRoadmap();
+    renderRoadmap();
+  }
+
+  // Mover tema hacia abajo
+  function moveTopicDown(nodeIndex, topicIndex) {
+    const topics = roadmap[nodeIndex].topics;
+    if (topicIndex === topics.length - 1) return;
+    [topics[topicIndex], topics[topicIndex + 1]] = [topics[topicIndex + 1], topics[topicIndex]];
+    saveRoadmap();
+    renderRoadmap();
+  }
+
+  // Actualizar título del nodo
+  function updateNodeTitle(nodeIndex, title) {
+    roadmap[nodeIndex].title = title;
+    saveRoadmap();
+  }
+
+  // Actualizar comentario del nodo
+  function updateNodeComment(nodeIndex, comment) {
+    roadmap[nodeIndex].comment = comment;
+    saveRoadmap();
+  }
+
+  // Actualizar texto del tema
+  function updateTopicText(nodeIndex, topicIndex, text) {
+    roadmap[nodeIndex].topics[topicIndex].text = text;
+    saveRoadmap();
+  }
+
+  // Alternar completado del tema
+  function toggleTopicCompletion(nodeIndex, topicIndex) {
+    roadmap[nodeIndex].topics[topicIndex].completed = 
+      !roadmap[nodeIndex].topics[topicIndex].completed;
+    saveRoadmap();
+    renderRoadmap();
+  }
+
+  // Eliminar nodo
+  function removeNode(nodeIndex) {
+    if (confirm('¿Estás seguro de que quieres eliminar este nodo?')) {
+      roadmap.splice(nodeIndex, 1);
+      saveRoadmap();
+      renderRoadmap();
+    }
+  }
+
+  // Mover nodo hacia arriba
+  function moveNodeUp(nodeIndex) {
+    if (nodeIndex === 0) return;
+    [roadmap[nodeIndex], roadmap[nodeIndex - 1]] = 
+      [roadmap[nodeIndex - 1], roadmap[nodeIndex]];
+    saveRoadmap();
+    renderRoadmap();
+  }
+
+  // Mover nodo hacia abajo
+  function moveNodeDown(nodeIndex) {
+    if (nodeIndex === roadmap.length - 1) return;
+    [roadmap[nodeIndex], roadmap[nodeIndex + 1]] = 
+      [roadmap[nodeIndex + 1], roadmap[nodeIndex]];
+    saveRoadmap();
+    renderRoadmap();
+  }
+
+  // Mostrar modal de importación
+  function showImportModal() {
+    document.getElementById('importModal').style.display = 'flex';
+  }
+
+  // Cerrar modal de importación
+  function closeImportModal() {
+    document.getElementById('importModal').style.display = 'none';
+  }
+
+  // Importar roadmap desde texto
+  function importRoadmap() {
+    const text = document.getElementById('importTextarea').value;
+    if (!text.trim()) {
+      alert('Por favor, ingresa un texto válido');
+      return;
+    }
+    
+    const lines = text.split('\n');
+    const newRoadmap = [];
+    let currentNode = null;
+    
+    lines.forEach(line => {
+      const trimmedLine = line.trim();
+      
+      // Nodo de inicio
+      if (trimmedLine.startsWith('+ ') && !trimmedLine.toLowerCase().includes('final') && !trimmedLine.toLowerCase().includes('listo')) {
+        if (currentNode) newRoadmap.push(currentNode);
+        currentNode = {
+          type: 'start',
+          title: trimmedLine.substring(2).trim(),
+          comment: '',
+          topics: []
+        };
+      }
+      // Nodo final
+      else if (trimmedLine.startsWith('+ ') && (trimmedLine.toLowerCase().includes('final') || trimmedLine.toLowerCase().includes('listo'))) {
+        if (currentNode) newRoadmap.push(currentNode);
+        currentNode = {
+          type: 'end',
+          title: trimmedLine.substring(2).trim(),
+          comment: '',
+          topics: []
+        };
+      }
+      // Nodo intermedio
+      else if (trimmedLine.startsWith('- ') && !trimmedLine.startsWith('--')) {
+        if (currentNode) newRoadmap.push(currentNode);
+        currentNode = {
+          type: 'intermediate',
+          title: trimmedLine.substring(2).trim(),
+          comment: '',
+          topics: []
+        };
+      }
+      // Comentario
+      else if (trimmedLine.startsWith('# ')) {
+        if (currentNode) {
+          currentNode.comment = trimmedLine.substring(2).trim();
+        }
+      }
+      // Tema
+      else if (trimmedLine.startsWith('-- ')) {
+        if (currentNode) {
+          currentNode.topics.push({
+            text: trimmedLine.substring(3).trim(),
+            completed: false
+          });
+        }
+      }
+      // Conexión (ignorar por ahora)
+      else if (trimmedLine.startsWith('!')) {
+        // Las conexiones se ignoran en esta implementación
+      }
+    });
+    
+    // Añadir el último nodo
+    if (currentNode) newRoadmap.push(currentNode);
+    
+    roadmap = newRoadmap;
+    saveRoadmap();
+    renderRoadmap();
+    closeImportModal();
+    alert('Ruta importada correctamente');
+  }
+
+  // Exportar roadmap a texto
+  function exportRoadmap() {
+    let exportText = '';
+    
+    roadmap.forEach(node => {
+      // Añadir nodo según tipo
+      if (node.type === 'start') {
+        exportText += `+ ${node.title}\n`;
+      } else if (node.type === 'end') {
+        exportText += `+ ${node.title}\n`;
+      } else {
+        exportText += `- ${node.title}\n`;
+      }
+      
+      // Añadir comentario si existe
+      if (node.comment) {
+        exportText += `# ${node.comment}\n`;
+      }
+      
+      // Añadir temas
+      node.topics.forEach(topic => {
+        exportText += `-- ${topic.text}\n`;
+      });
+      
+      exportText += '\n';
+    });
+    
+    // Crear elemento temporal para copiar al portapapeles
+    const textarea = document.createElement('textarea');
+    textarea.value = exportText;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    
+    alert('Ruta copiada al portapapeles');
+  }
+
+  // Validar roadmap
+  function validateRoadmap() {
+    const errors = [];
+    
+    // Verificar que hay al menos un nodo de inicio y uno de final
+    const startNodes = roadmap.filter(node => node.type === 'start');
+    const endNodes = roadmap.filter(node => node.type === 'end');
+    
+    if (startNodes.length === 0) {
+      errors.push('No hay ningún nodo de inicio');
+    }
+    
+    if (endNodes.length === 0) {
+      errors.push('No hay ningún nodo final');
+    }
+    
+    // Verificar que todos los nodos tienen título
+    roadmap.forEach((node, index) => {
+      if (!node.title.trim()) {
+        errors.push(`El nodo ${index + 1} no tiene título`);
+      }
+    });
+    
+    // Mostrar resultados
+    if (errors.length === 0) {
+      alert('✅ La ruta es válida');
+    } else {
+      alert('❌ Se encontraron problemas:\n\n' + errors.join('\n'));
+    }
+  }
+
+  // Búsqueda
+  document.getElementById('searchInput').addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const nodes = document.querySelectorAll('.node');
+    
+    nodes.forEach(node => {
+      const text = node.textContent.toLowerCase();
+      if (text.includes(searchTerm)) {
+        node.classList.add('highlighted');
+        node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        node.classList.remove('highlighted');
+      }
+    });
+  });
+
+  // ✅ Ejecutar solo cuando el DOM esté listo
+  document.addEventListener('DOMContentLoaded', () => {
+    renderRoadmap();
+  });
+</script>
+</body>
+</html>
