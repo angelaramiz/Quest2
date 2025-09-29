@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Constructor de Rutas de Aprendizaje - Rutas Autocontenidas</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🛠️ Constructor de Rutas de Aprendizaje</h1>
+      <p>Crea rutas autocontenidas con puntos de transición a otras especialidades</p>
+    </header>
+
+    <div class="progress-container">
+      <h3>Progreso de la Ruta</h3>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+      </div>
+      <div class="progress-text">
+        <span id="completedCount">0 completados</span>
+        <span id="totalCount">0 total</span>
+        <span id="progressPercentage">0%</span>
+      </div>
+    </div>
+
+    <div class="view-controls">
+      <button class="btn btn-active" id="btnDiagramView" onclick="switchView('diagram')">🔵 Vista Diagrama</button>
+      <button class="btn" id="btnListView" onclick="switchView('list')">📋 Vista Lista</button>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-start" onclick="addNode('start')">+ Inicio</button>
+      <button class="btn" onclick="addNode('intermediate')">+ Intermedio</button>
+      <button class="btn btn-end" onclick="addNode('end')">+ Final</button>
+      <button class="btn btn-transition" onclick="addTransitionNode()">+ Transición</button>
+      <button class="btn btn-import" onclick="showImportModal()">📥 Importar</button>
+      <button class="btn btn-export" onclick="exportRoadmap()">📤 Exportar</button>
+      <button class="btn" onclick="validateRoadmap()">✅ Validar</button>
+    </div>
+
+    <!-- Vista de Diagrama -->
+    <div class="diagram-view" id="diagramView">
+      <svg class="connections" id="connectionsCanvas"></svg>
+      <svg class="transition-connections" id="transitionConnectionsCanvas"></svg>
+      <div class="nodes-grid" id="nodesGrid">
+        <div class="empty-diagram" id="emptyDiagram">
+          <h3>¡Comienza agregando tu primer nodo!</h3>
+          <p>Usa los botones de arriba para crear tu ruta de aprendizaje</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel de Información -->
+  <div class="info-panel" id="infoPanel">
+    <div class="panel-header">
+      <h3 id="panelTitle">Detalles del Nodo</h3>
+      <button class="btn-close-panel" onclick="closeInfoPanel()">×</button>
+    </div>
+    <div class="panel-content" id="panelContent">
+      <!-- El contenido se carga dinámicamente -->
+    </div>
+  </div>
+
+  <!-- Modal para importar -->
+  <div class="modal" id="importModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Importar Ruta</h2>
+        <button class="close-modal" onclick="closeImportModal()">&times;</button>
+      </div>
+      
+      <div class="syntax-guide">
+        <h4>Sintaxis para Rutas Autocontenidas:</h4>
+        <div class="syntax-example">+ [INICIO] Título de la Ruta
+# [DESCRIPCIÓN] Objetivo principal
+-- [TEMA] Habilidad específica
+-- [TEMA] Otra habilidad
+! > [NOMBRE_RUTA] # [TIPO_TRANSICIÓN]
+
+- [INTERMEDIO] Etapa intermedia
+# [CONTEXTO] Lo que se logra
+-- [TEMA] Habilidad de esta etapa
+
++ [FINAL] Final de Ruta
+# [LOGRO] Lo alcanzado
+-- [TEMA] Habilidades finales
+! > [CONTINUACIÓN] # Bases para próxima ruta</div>
+        
+        <p><strong>Ejemplo práctico:</strong></p>
+        <div class="syntax-example">+ Ruta Analista de Datos
+# Conviértete en analista de datos
+-- SQL y Excel
+-- Visualización de datos
+-- Análisis de negocio
+! > Ciencia de Datos # Bases técnicas
+
+- Fundamentos Esenciales
+# Base sólida para analista
+-- Estadística descriptiva
+-- SQL avanzado
+
++ Analista de Datos Senior
+# ¡Ruta completada!
+-- Liderazgo en proyectos
+-- Mentoria de equipos
+! > CONTINUAR_CIENCIA_DATOS # Transición</div>
+      </div>
+      
+      <textarea class="import-textarea" id="importTextarea" placeholder="Pega aquí tu ruta usando la sintaxis de arriba...">+ Ruta Analista de Datos Completa
+# Conviértete en analista de datos desde cero hasta senior
+-- Fundamentos: pensamiento analítico y estadística
+-- Herramientas: Excel, SQL, Tableau/Power BI
+-- Análisis de negocio y métricas KPIs
+-- Comunicación y storytelling con datos
+! > Ciencia de Datos # Bases matemáticas y técnicas
+! > Business Intelligence # Profundización en herramientas
+
+- Fundamentos Esenciales
+# Base sólida para cualquier analista
+-- Estadística descriptiva e inferencial
+-- SQL desde básico hasta avanzado
+-- Excel para análisis (tablas dinámicas, Power Query)
+-- Introducción a Python para análisis (opcional)
+
+- Herramientas y Técnicas
+# Dominio del toolkit del analista
+-- Tableau o Power BI para visualización
+-- Análisis exploratorio de datos (EDA)
+-- Dashboarding y reportes automatizados
+-- Limpieza y preparación de datos
+
+- Aplicación en Negocio
+# De los datos a las decisiones
+-- Definición y tracking de KPIs
+-- Análisis de segmentación de clientes
+-- Funnel analysis y conversión
+-- Presentación a stakeholders no técnicos
+
++ Analista de Datos Senior
+# ¡Has completado la ruta de analista de datos!
+-- Capacidad de liderar proyectos analíticos completos
+-- Habilidad para mentorizar analistas junior
+-- Experiencia en múltiples dominios de negocio
+-- Comunicación efectiva con todos los niveles
+! > CONTINUAR_CIENCIA_DATOS # Bases listas para ciencia de datos
+! > CONTINUAR_BI_AVANZADO # Especialización en BI
+! > CONTINUAR_LIDERAZGO # Camino hacia liderazgo</textarea>
+      <div class="node-actions" style="margin-top: 15px;">
+        <button class="btn" onclick="importRoadmap()">Importar</button>
+        <button class="btn" onclick="closeImportModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
