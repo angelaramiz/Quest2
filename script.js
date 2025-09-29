@@ -315,7 +315,55 @@ function drawConnections() {
   svg.innerHTML = '';
   transitionSvg.innerHTML = '';
   
-  // Dibujar líneas entre nodos en orden
+  // Crear gradientes para las líneas
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+  gradient.setAttribute('id', 'connectionGradient');
+  gradient.setAttribute('x1', '0%');
+  gradient.setAttribute('y1', '0%');
+  gradient.setAttribute('x2', '100%');
+  gradient.setAttribute('y2', '0%');
+  
+  const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+  stop1.setAttribute('offset', '0%');
+  stop1.setAttribute('stop-color', '#667eea');
+  stop1.setAttribute('stop-opacity', '0.8');
+  
+  const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+  stop2.setAttribute('offset', '100%');
+  stop2.setAttribute('stop-color', '#764ba2');
+  stop2.setAttribute('stop-opacity', '0.8');
+  
+  gradient.appendChild(stop1);
+  gradient.appendChild(stop2);
+  defs.appendChild(gradient);
+  svg.appendChild(defs);
+  
+  // Gradiente para transiciones
+  const transitionDefs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  const transitionGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+  transitionGradient.setAttribute('id', 'transitionGradient');
+  transitionGradient.setAttribute('x1', '0%');
+  transitionGradient.setAttribute('y1', '0%');
+  transitionGradient.setAttribute('x2', '100%');
+  transitionGradient.setAttribute('y2', '0%');
+  
+  const tStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+  tStop1.setAttribute('offset', '0%');
+  tStop1.setAttribute('stop-color', '#ff9a9e');
+  tStop1.setAttribute('stop-opacity', '0.6');
+  
+  const tStop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+  tStop2.setAttribute('offset', '100%');
+  tStop2.setAttribute('stop-color', '#fecfef');
+  tStop2.setAttribute('stop-opacity', '0.6');
+  
+  transitionGradient.appendChild(tStop1);
+  transitionGradient.appendChild(tStop2);
+  transitionDefs.appendChild(transitionGradient);
+  transitionSvg.appendChild(transitionDefs);
+  
+  // Dibujar líneas entre nodos en orden con curvas suaves
   for (let i = 0; i < roadmap.length - 1; i++) {
     const currentEl = document.querySelector(`[data-node-id="${i}"]`);
     const nextEl = document.querySelector(`[data-node-id="${i + 1}"]`);
@@ -330,19 +378,56 @@ function drawConnections() {
       const x2 = rect2.left + rect2.width/2 - containerRect.left;
       const y2 = rect2.top + rect2.height/2 - containerRect.top;
       
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', x1);
-      line.setAttribute('y1', y1);
-      line.setAttribute('x2', x2);
-      line.setAttribute('y2', y2);
-      line.setAttribute('stroke', '#3498db');
-      line.setAttribute('stroke-width', '3');
+      // Crear línea curva con SVG path
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       
-      svg.appendChild(line);
+      // Calcular puntos de control para curva suave
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const controlDistance = distance * 0.3;
+      
+      const angle = Math.atan2(dy, dx);
+      const controlAngle1 = angle - Math.PI * 0.3;
+      const controlAngle2 = angle + Math.PI * 0.3;
+      
+      const cx1 = x1 + Math.cos(controlAngle1) * controlDistance;
+      const cy1 = y1 + Math.sin(controlAngle1) * controlDistance;
+      const cx2 = x2 - Math.cos(controlAngle2) * controlDistance;
+      const cy2 = y2 - Math.sin(controlAngle2) * controlDistance;
+      
+      const pathData = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+      path.setAttribute('d', pathData);
+      path.setAttribute('stroke', 'url(#connectionGradient)');
+      path.setAttribute('stroke-width', '4');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('filter', 'drop-shadow(2px 2px 4px rgba(0,0,0,0.3))');
+      
+      svg.appendChild(path);
+      
+      // Añadir flecha al final
+      const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      const arrowAngle = Math.atan2(y2 - cy2, x2 - cx2);
+      const arrowSize = 8;
+      const arrowX = x2 - Math.cos(arrowAngle) * 45;
+      const arrowY = y2 - Math.sin(arrowAngle) * 45;
+      
+      const arrowPoints = [
+        [arrowX + Math.cos(arrowAngle) * arrowSize, arrowY + Math.sin(arrowAngle) * arrowSize],
+        [arrowX + Math.cos(arrowAngle + Math.PI * 0.8) * arrowSize, arrowY + Math.sin(arrowAngle + Math.PI * 0.8) * arrowSize],
+        [arrowX + Math.cos(arrowAngle - Math.PI * 0.8) * arrowSize, arrowY + Math.sin(arrowAngle - Math.PI * 0.8) * arrowSize]
+      ].map(point => point.join(',')).join(' ');
+      
+      arrow.setAttribute('points', arrowPoints);
+      arrow.setAttribute('fill', '#764ba2');
+      arrow.setAttribute('filter', 'drop-shadow(1px 1px 2px rgba(0,0,0,0.3))');
+      
+      svg.appendChild(arrow);
     }
   }
   
-  // Dibujar conexiones de transición
+  // Dibujar conexiones de transición con líneas punteadas animadas
   roadmap.forEach((node, index) => {
     if (node.transitions && node.transitions.length > 0) {
       const currentEl = document.querySelector(`[data-node-id="${index}"]`);
@@ -365,9 +450,11 @@ function drawConnections() {
           line.setAttribute('y1', y1);
           line.setAttribute('x2', x2);
           line.setAttribute('y2', y2);
-          line.setAttribute('stroke', '#1abc9c');
-          line.setAttribute('stroke-width', '2');
-          line.setAttribute('stroke-dasharray', '5,5');
+          line.setAttribute('stroke', 'url(#transitionGradient)');
+          line.setAttribute('stroke-width', '3');
+          line.setAttribute('stroke-dasharray', '8,4');
+          line.setAttribute('stroke-linecap', 'round');
+          line.setAttribute('filter', 'drop-shadow(1px 1px 3px rgba(0,0,0,0.2))');
           
           transitionSvg.appendChild(line);
         }
