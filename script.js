@@ -1,69 +1,103 @@
 // Estado inicial
-let roadmap = JSON.parse(localStorage.getItem('customRoadmap')) || [];
-let currentView = 'diagram';
+let roadmap;
+try {
+  roadmap = JSON.parse(localStorage.getItem('customRoadmap')) || [];
+} catch (e) {
+  console.warn('Error al cargar datos del localStorage:', e);
+  roadmap = [];
+}
+
 let selectedNodeIndex = null;
 let diagramOffset = { x: 0, y: 0 };
 let isDraggingDiagram = false;
 let dragStart = { x: 0, y: 0 };
 
+// Función para escapar caracteres HTML peligrosos
+function escapeHtml(text) {
+  if (typeof text !== 'string') return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 // Inicialización
 document.addEventListener('DOMContentLoaded', () => {
   renderDiagram();
-  setupDiagramPanning();
+  setupDiagramInteractions();
 });
 
-// Configurar el arrastre del diagrama
-function setupDiagramPanning() {
+// Configurar interacciones del diagrama (touch y mouse)
+function setupDiagramInteractions() {
   const diagram = document.getElementById('diagramView');
   
-  diagram.addEventListener('mousedown', (e) => {
+  // Soporte para mouse
+  diagram.addEventListener('mousedown', startPan);
+  document.addEventListener('mousemove', doPan);
+  document.addEventListener('mouseup', endPan);
+  
+  // Soporte para touch (móvil)
+  diagram.addEventListener('touchstart', handleTouchStart, { passive: false });
+  document.addEventListener('touchmove', handleTouchMove, { passive: false });
+  document.addEventListener('touchend', endPan);
+  
+  function startPan(e) {
     if (e.target === diagram) {
       isDraggingDiagram = true;
       dragStart.x = e.clientX - diagramOffset.x;
       dragStart.y = e.clientY - diagramOffset.y;
-      diagram.style.cursor = 'grabbing';
     }
-  });
+  }
   
-  document.addEventListener('mousemove', (e) => {
+  function handleTouchStart(e) {
+    if (e.target === diagram && e.touches.length === 1) {
+      e.preventDefault();
+      isDraggingDiagram = true;
+      const touch = e.touches[0];
+      dragStart.x = touch.clientX - diagramOffset.x;
+      dragStart.y = touch.clientY - diagramOffset.y;
+    }
+  }
+  
+  function doPan(e) {
     if (!isDraggingDiagram) return;
     
     diagramOffset.x = e.clientX - dragStart.x;
     diagramOffset.y = e.clientY - dragStart.y;
     
+    updateDiagramPosition();
+  }
+  
+  function handleTouchMove(e) {
+    if (!isDraggingDiagram || e.touches.length !== 1) return;
+    e.preventDefault();
+    
+    const touch = e.touches[0];
+    diagramOffset.x = touch.clientX - dragStart.x;
+    diagramOffset.y = touch.clientY - dragStart.y;
+    
+    updateDiagramPosition();
+  }
+  
+  function updateDiagramPosition() {
     const nodesGrid = document.getElementById('nodesGrid');
     nodesGrid.style.transform = `translate(${diagramOffset.x}px, ${diagramOffset.y}px)`;
-    
     drawConnections();
-  });
+  }
   
-  document.addEventListener('mouseup', () => {
+  function endPan() {
     isDraggingDiagram = false;
-    diagram.style.cursor = 'grab';
-  });
-}
-
-// Cambiar entre vistas
-function switchView(view) {
-  currentView = view;
-  
-  // Actualizar botones
-  document.getElementById('btnDiagramView').classList.toggle('btn-active', view === 'diagram');
-  document.getElementById('btnListView').classList.toggle('btn-active', view === 'list');
-  
-  // Mostrar/ocultar vistas
-  document.getElementById('diagramView').style.display = view === 'diagram' ? 'block' : 'none';
-  
-  // Renderizar la vista correspondiente
-  if (view === 'diagram') {
-    renderDiagram();
   }
 }
 
 // Guardar en localStorage
 function saveRoadmap() {
-  localStorage.setItem('customRoadmap', JSON.stringify(roadmap));
-  updateProgress();
+  try {
+    localStorage.setItem('customRoadmap', JSON.stringify(roadmap));
+    updateProgress();
+  } catch (e) {
+    console.error('Error al guardar en localStorage:', e);
+    alert('Error al guardar los datos. Es posible que el navegador esté en modo privado o el almacenamiento esté lleno.');
+  }
 }
 
 // Renderizar el diagrama
@@ -71,16 +105,26 @@ function renderDiagram() {
   const container = document.getElementById('nodesGrid');
   const emptyDiagram = document.getElementById('emptyDiagram');
   
-  if (!container || !emptyDiagram) return;
+  if (!container || !emptyDiagram) {
+    console.error('Elementos DOM no encontrados');
+    return;
+  }
+  
+  // Limpiar contenido previo
+  container.innerHTML = '';
   
   if (roadmap.length === 0) {
     emptyDiagram.style.display = 'flex';
-    container.innerHTML = '';
+    // Limpiar SVGs también
+    const connectionsCanvas = document.getElementById('connectionsCanvas');
+    const transitionCanvas = document.getElementById('transitionConnectionsCanvas');
+    if (connectionsCanvas) connectionsCanvas.innerHTML = '';
+    if (transitionCanvas) transitionCanvas.innerHTML = '';
+    updateProgress();
     return;
   }
   
   emptyDiagram.style.display = 'none';
-  container.innerHTML = '';
   
   roadmap.forEach((node, index) => {
     const nodeEl = document.createElement('div');
@@ -91,6 +135,11 @@ function renderDiagram() {
     const position = node.position || calculateNodePosition(index, roadmap.length);
     nodeEl.style.left = `${position.x}px`;
     nodeEl.style.top = `${position.y}px`;
+    
+    // Mantener selección si es el nodo seleccionado
+    if (selectedNodeIndex === index) {
+      nodeEl.classList.add('selected');
+    }
     
     // Texto del nodo (número o ícono para transiciones)
     let badgeText = `${index + 1}`;
@@ -121,30 +170,71 @@ function renderDiagram() {
     }
   });
   
-  drawConnections();
-  updateProgress();
+  // Usar setTimeout para asegurar que los elementos estén renderizados antes de dibujar conexiones
+  setTimeout(() => {
+    drawConnections();
+    updateProgress();
+  }, 10);
 }
 
-// Calcular posición automática para los nodos
+// Calcular posición automática para los nodos (optimizado para móvil)
 function calculateNodePosition(index, total) {
-  // Distribución en espiral para mejor visualización
-  const angle = (index / total) * Math.PI * 2;
-  const radius = 150 + (Math.min(index, total - index) * 40);
-  const centerX = 500;
-  const centerY = 300;
+  // Valores por defecto para evitar NaN
+  if (typeof index !== 'number' || typeof total !== 'number' || total <= 0) {
+    return { x: 250, y: 150 };
+  }
   
-  return {
-    x: centerX + Math.cos(angle) * radius,
-    y: centerY + Math.sin(angle) * radius
-  };
+  // Obtener dimensiones del contenedor
+  const container = document.getElementById('diagramView');
+  const containerWidth = container ? container.clientWidth : window.innerWidth;
+  const containerHeight = container ? container.clientHeight : window.innerHeight;
+  
+  // Valores mínimos para evitar problemas
+  const minWidth = 300;
+  const minHeight = 200;
+  const safeWidth = Math.max(containerWidth || minWidth, minWidth);
+  const safeHeight = Math.max(containerHeight || minHeight, minHeight);
+  
+  // Ajustar para móvil vs desktop
+  const isMobile = safeWidth < 768;
+  const centerX = safeWidth / 2;
+  const centerY = safeHeight / 2;
+  
+  if (total <= 1) {
+    return { x: centerX - 30, y: centerY - 30 };
+  }
+  
+  if (isMobile) {
+    // Layout más compacto para móvil
+    const angle = (index / total) * Math.PI * 2;
+    const radius = Math.min(safeWidth, safeHeight) * 0.25 + (index % 3) * 40;
+    
+    return {
+      x: Math.max(0, centerX + Math.cos(angle) * radius - 30),
+      y: Math.max(0, centerY + Math.sin(angle) * radius - 30)
+    };
+  } else {
+    // Layout más espaciado para desktop
+    const angle = (index / total) * Math.PI * 2;
+    const radius = 150 + (Math.min(index, total - index) * 40);
+    
+    return {
+      x: Math.max(0, centerX + Math.cos(angle) * radius - 35),
+      y: Math.max(0, centerY + Math.sin(angle) * radius - 35)
+    };
+  }
 }
 
-// Hacer nodos arrastrables
+// Hacer nodos arrastrables (compatible con touch)
 function makeNodeDraggable(nodeElement, nodeIndex) {
   let isDragging = false;
   let startX, startY, initialLeft, initialTop;
   
+  // Eventos de mouse
   nodeElement.addEventListener('mousedown', startDrag);
+  
+  // Eventos de touch
+  nodeElement.addEventListener('touchstart', startTouchDrag, { passive: false });
   
   function startDrag(e) {
     isDragging = true;
@@ -158,12 +248,43 @@ function makeNodeDraggable(nodeElement, nodeIndex) {
     e.stopPropagation();
   }
   
+  function startTouchDrag(e) {
+    if (e.touches.length !== 1) return;
+    e.preventDefault();
+    
+    isDragging = true;
+    const touch = e.touches[0];
+    startX = touch.clientX;
+    startY = touch.clientY;
+    initialLeft = parseInt(nodeElement.style.left);
+    initialTop = parseInt(nodeElement.style.top);
+    
+    document.addEventListener('touchmove', touchDrag, { passive: false });
+    document.addEventListener('touchend', stopDrag);
+    e.stopPropagation();
+  }
+  
   function drag(e) {
     if (!isDragging) return;
     
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
     
+    updateNodePosition(dx, dy);
+  }
+  
+  function touchDrag(e) {
+    if (!isDragging || e.touches.length !== 1) return;
+    e.preventDefault();
+    
+    const touch = e.touches[0];
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+    
+    updateNodePosition(dx, dy);
+  }
+  
+  function updateNodePosition(dx, dy) {
     nodeElement.style.left = `${initialLeft + dx}px`;
     nodeElement.style.top = `${initialTop + dy}px`;
     
@@ -177,9 +298,12 @@ function makeNodeDraggable(nodeElement, nodeIndex) {
   }
   
   function stopDrag() {
+    if (!isDragging) return;
     isDragging = false;
     document.removeEventListener('mousemove', drag);
     document.removeEventListener('mouseup', stopDrag);
+    document.removeEventListener('touchmove', touchDrag);
+    document.removeEventListener('touchend', stopDrag);
     saveRoadmap();
   }
 }
@@ -282,8 +406,8 @@ function showNodeInfo(nodeIndex) {
         ${node.transitions.map(transition => `
           <div class="transition-item">
             <div class="transition-text">
-              <strong>${transition.targetTitle}</strong>
-              <br><small>${transition.type}</small>
+              <strong>${escapeHtml(transition.targetTitle)}</strong>
+              <br><small>${escapeHtml(transition.type)}</small>
             </div>
             <button onclick="removeTransition(${nodeIndex}, '${transition.target}')">🗑️</button>
           </div>
@@ -293,17 +417,17 @@ function showNodeInfo(nodeIndex) {
   }
   
   content.innerHTML = `
-    <input type="text" class="node-title-input" value="${node.title}" 
+    <input type="text" class="node-title-input" value="${escapeHtml(node.title)}" 
            onblur="updateNodeTitle(${nodeIndex}, this.value)" placeholder="Título del nodo">
     <textarea class="node-comment-input" placeholder="Agregar comentario (opcional)" 
-              onblur="updateNodeComment(${nodeIndex}, this.value)">${node.comment || ''}</textarea>
+              onblur="updateNodeComment(${nodeIndex}, this.value)">${escapeHtml(node.comment || '')}</textarea>
     
     <div class="topics-list">
       ${node.topics.map((topic, tIndex) => `
         <div class="topic-item">
           <input type="checkbox" class="topic-checkbox" ${topic.completed ? 'checked' : ''}
                  onchange="toggleTopicCompletion(${nodeIndex}, ${tIndex})">
-          <input type="text" class="topic-input" value="${topic.text}"
+          <input type="text" class="topic-input" value="${escapeHtml(topic.text)}"
                  onblur="updateTopicText(${nodeIndex}, ${tIndex}, this.value)">
           <div class="topic-actions">
             <button onclick="moveTopicUp(${nodeIndex}, ${tIndex})">⬆️</button>
@@ -332,13 +456,20 @@ function showNodeInfo(nodeIndex) {
 
 // Cerrar panel de información
 function closeInfoPanel() {
-  document.getElementById('infoPanel').classList.remove('open');
+  const panel = document.getElementById('infoPanel');
+  panel.classList.remove('open');
+  
+  // Deseleccionar nodo actual
+  if (selectedNodeIndex !== null) {
+    const currentNode = document.querySelector(`[data-node-id="${selectedNodeIndex}"]`);
+    if (currentNode) currentNode.classList.remove('selected');
+    selectedNodeIndex = null;
+  }
+  
   saveRoadmap();
   
-  // Actualizar la vista actual
-  if (currentView === 'diagram') {
-    renderDiagram();
-  }
+  // Forzar un renderizado completo
+  renderDiagram();
 }
 
 // Actualizar progreso
@@ -401,6 +532,7 @@ function addTopic(nodeIndex) {
     completed: false
   });
   saveRoadmap();
+  renderDiagram();
   
   // Actualizar panel si está abierto
   if (document.getElementById('infoPanel').classList.contains('open') && selectedNodeIndex === nodeIndex) {
@@ -412,6 +544,7 @@ function addTopic(nodeIndex) {
 function removeTopic(nodeIndex, topicIndex) {
   roadmap[nodeIndex].topics.splice(topicIndex, 1);
   saveRoadmap();
+  renderDiagram();
   
   // Actualizar panel si está abierto
   if (document.getElementById('infoPanel').classList.contains('open') && selectedNodeIndex === nodeIndex) {
@@ -425,6 +558,7 @@ function moveTopicUp(nodeIndex, topicIndex) {
   const topics = roadmap[nodeIndex].topics;
   [topics[topicIndex], topics[topicIndex - 1]] = [topics[topicIndex - 1], topics[topicIndex]];
   saveRoadmap();
+  renderDiagram();
   
   // Actualizar panel si está abierto
   if (document.getElementById('infoPanel').classList.contains('open') && selectedNodeIndex === nodeIndex) {
@@ -438,6 +572,7 @@ function moveTopicDown(nodeIndex, topicIndex) {
   if (topicIndex === topics.length - 1) return;
   [topics[topicIndex], topics[topicIndex + 1]] = [topics[topicIndex + 1], topics[topicIndex]];
   saveRoadmap();
+  renderDiagram();
   
   // Actualizar panel si está abierto
   if (document.getElementById('infoPanel').classList.contains('open') && selectedNodeIndex === nodeIndex) {
@@ -449,6 +584,7 @@ function moveTopicDown(nodeIndex, topicIndex) {
 function updateNodeTitle(nodeIndex, title) {
   roadmap[nodeIndex].title = title;
   saveRoadmap();
+  renderDiagram();
   
   // Actualizar panel si está abierto
   if (document.getElementById('infoPanel').classList.contains('open') && selectedNodeIndex === nodeIndex) {
@@ -460,12 +596,14 @@ function updateNodeTitle(nodeIndex, title) {
 function updateNodeComment(nodeIndex, comment) {
   roadmap[nodeIndex].comment = comment;
   saveRoadmap();
+  renderDiagram();
 }
 
 // Actualizar texto del tema
 function updateTopicText(nodeIndex, topicIndex, text) {
   roadmap[nodeIndex].topics[topicIndex].text = text;
   saveRoadmap();
+  renderDiagram();
 }
 
 // Alternar completado del tema
@@ -473,6 +611,7 @@ function toggleTopicCompletion(nodeIndex, topicIndex) {
   roadmap[nodeIndex].topics[topicIndex].completed = 
     !roadmap[nodeIndex].topics[topicIndex].completed;
   saveRoadmap();
+  renderDiagram();
   updateProgress();
 }
 
@@ -527,10 +666,27 @@ function removeNode(nodeIndex) {
   if (confirm('¿Estás seguro de que quieres eliminar este nodo?')) {
     roadmap.splice(nodeIndex, 1);
     
+    // Actualizar referencias de transiciones
+    roadmap.forEach(node => {
+      if (node.transitions) {
+        // Filtrar transiciones que apuntan al nodo eliminado
+        node.transitions = node.transitions.filter(transition => transition.target !== nodeIndex);
+        
+        // Actualizar índices de transiciones que apuntan a nodos posteriores
+        node.transitions.forEach(transition => {
+          if (transition.target > nodeIndex) {
+            transition.target--;
+          }
+        });
+      }
+    });
+    
     // Cerrar panel si estaba abierto para este nodo
     if (selectedNodeIndex === nodeIndex) {
       closeInfoPanel();
       selectedNodeIndex = null;
+    } else if (selectedNodeIndex > nodeIndex) {
+      selectedNodeIndex--;
     }
     
     saveRoadmap();
@@ -541,19 +697,75 @@ function removeNode(nodeIndex) {
 // Mover nodo hacia arriba
 function moveNodeUp(nodeIndex) {
   if (nodeIndex === 0) return;
+  
+  // Intercambiar nodos
   [roadmap[nodeIndex], roadmap[nodeIndex - 1]] = 
     [roadmap[nodeIndex - 1], roadmap[nodeIndex]];
+  
+  // Actualizar referencias de transiciones
+  roadmap.forEach(node => {
+    if (node.transitions) {
+      node.transitions.forEach(transition => {
+        if (transition.target === nodeIndex) {
+          transition.target = nodeIndex - 1;
+        } else if (transition.target === nodeIndex - 1) {
+          transition.target = nodeIndex;
+        }
+      });
+    }
+  });
+  
+  // Actualizar selección si es necesario
+  if (selectedNodeIndex === nodeIndex) {
+    selectedNodeIndex = nodeIndex - 1;
+  } else if (selectedNodeIndex === nodeIndex - 1) {
+    selectedNodeIndex = nodeIndex;
+  }
+  
   saveRoadmap();
   renderDiagram();
+  
+  // Actualizar panel si está abierto
+  if (document.getElementById('infoPanel').classList.contains('open')) {
+    showNodeInfo(selectedNodeIndex);
+  }
 }
 
 // Mover nodo hacia abajo
 function moveNodeDown(nodeIndex) {
   if (nodeIndex === roadmap.length - 1) return;
+  
+  // Intercambiar nodos
   [roadmap[nodeIndex], roadmap[nodeIndex + 1]] = 
     [roadmap[nodeIndex + 1], roadmap[nodeIndex]];
+  
+  // Actualizar referencias de transiciones
+  roadmap.forEach(node => {
+    if (node.transitions) {
+      node.transitions.forEach(transition => {
+        if (transition.target === nodeIndex) {
+          transition.target = nodeIndex + 1;
+        } else if (transition.target === nodeIndex + 1) {
+          transition.target = nodeIndex;
+        }
+      });
+    }
+  });
+  
+  // Actualizar selección si es necesario
+  if (selectedNodeIndex === nodeIndex) {
+    selectedNodeIndex = nodeIndex + 1;
+  } else if (selectedNodeIndex === nodeIndex + 1) {
+    selectedNodeIndex = nodeIndex;
+  }
+  
   saveRoadmap();
   renderDiagram();
+  
+  // Actualizar panel si está abierto
+  if (document.getElementById('infoPanel').classList.contains('open')) {
+    showNodeInfo(selectedNodeIndex);
+  }
 }
 
 // Mostrar modal de importación
@@ -713,10 +925,25 @@ function importRoadmap() {
   });
 
   roadmap = newRoadmap;
+  
+  // Limpiar estado de selección
+  selectedNodeIndex = null;
+  
+  // Cerrar panel si está abierto
+  const panel = document.getElementById('infoPanel');
+  if (panel.classList.contains('open')) {
+    panel.classList.remove('open');
+  }
+  
   saveRoadmap();
   renderDiagram();
   closeImportModal();
-  alert(`Ruta importada correctamente. Se crearon ${newRoadmap.length} nodos.`);
+  
+  // Pequeña demora para asegurar que el renderizado se complete
+  setTimeout(() => {
+    updateProgress();
+    alert(`Ruta importada correctamente. Se crearon ${newRoadmap.length} nodos.`);
+  }, 100);
 }
 
 // Exportar roadmap a texto
@@ -773,9 +1000,16 @@ function exportRoadmap() {
 function validateRoadmap() {
   const errors = [];
   
+  // Verificar que roadmap existe y es un array
+  if (!Array.isArray(roadmap)) {
+    errors.push('Error: Los datos del roadmap están corruptos');
+    alert('❌ Error crítico:\n\n' + errors.join('\n'));
+    return;
+  }
+  
   // Verificar que hay al menos un nodo de inicio y uno de final
-  const startNodes = roadmap.filter(node => node.type === 'start');
-  const endNodes = roadmap.filter(node => node.type === 'end');
+  const startNodes = roadmap.filter(node => node && node.type === 'start');
+  const endNodes = roadmap.filter(node => node && node.type === 'end');
   
   if (startNodes.length === 0) {
     errors.push('No hay ningún nodo de inicio');
@@ -787,8 +1021,22 @@ function validateRoadmap() {
   
   // Verificar que todos los nodos tienen título
   roadmap.forEach((node, index) => {
-    if (!node.title.trim()) {
+    if (!node) {
+      errors.push(`El nodo ${index + 1} está vacío o corrupto`);
+      return;
+    }
+    
+    if (!node.title || typeof node.title !== 'string' || !node.title.trim()) {
       errors.push(`El nodo ${index + 1} no tiene título`);
+    }
+    
+    // Verificar que las transiciones tienen targets válidos
+    if (node.transitions && Array.isArray(node.transitions)) {
+      node.transitions.forEach((transition, tIndex) => {
+        if (transition.target < 0 || transition.target >= roadmap.length) {
+          errors.push(`El nodo ${index + 1} tiene una transición inválida (${tIndex + 1})`);
+        }
+      });
     }
   });
   
